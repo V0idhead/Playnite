@@ -19,8 +19,6 @@ namespace Playnite
     {
         private PlayniteSettings settings;
         private PlayniteApplication application;
-        private readonly Type colGroupType;
-        private readonly Guid colGroupId;
         private BitmapLoadProperties detailsListIconProperties;
         private BitmapLoadProperties gridViewCoverProperties;
         private BitmapLoadProperties backgroundImageProperties;
@@ -49,6 +47,7 @@ namespace Playnite
         public GameAction PlayAction => Game.PlayAction;
         public string DisplayName => Game.Name;
         public string Description => Game.Description;
+        public string Notes => Game.Notes;
         public bool IsInstalled => Game.IsInstalled;
         public bool IsInstalling => Game.IsInstalling;
         public bool IsUnistalling => Game.IsUninstalling;
@@ -75,6 +74,7 @@ namespace Playnite
         public PastTimeSegment ModifiedSegment => Game.ModifiedSegment;
         public PlaytimeCategory PlaytimeCategory => Game.PlaytimeCategory;
         public InstallationStatus InstallationState => Game.InstallationStatus;
+        public char NameGroup => GetNameGroup();
 
         public List<Guid> CategoryIds => Game.CategoryIds;
         public List<Guid> GenreIds => Game.GenreIds;
@@ -108,27 +108,27 @@ namespace Playnite
 
         public Series Series
         {
-            get => Game.SeriesId == Guid.Empty ? Series.Empty : Game.Series;
+            get => Game.Series ?? Series.Empty;
         }
 
         public Platform Platform
         {
-            get => Game.PlatformId == Guid.Empty ? Platform.Empty : Game.Platform;
+            get => Game.Platform ?? Platform.Empty;
         }
 
         public Region Region
         {
-            get => Game.RegionId == Guid.Empty ? Region.Empty : Game.Region;
+            get => Game.Region ?? Region.Empty;
         }
 
         public GameSource Source
         {
-            get => Game.SourceId == Guid.Empty ? GameSource.Empty : Game.Source;
+            get => Game.Source ?? GameSource.Empty;
         }
 
         public AgeRating AgeRating
         {
-            get => Game.AgeRatingId == Guid.Empty ? AgeRating.Empty : Game.AgeRating;
+            get => Game.AgeRating ?? AgeRating.Empty;
         }
 
         public Category Category
@@ -242,35 +242,64 @@ namespace Playnite
             }
         }
 
-        public GamesCollectionViewEntry(Game game, LibraryPlugin plugin, Type colGroupType, Guid colGroupId, PlayniteSettings settings) : this(game, plugin, settings)
+        public static GamesCollectionViewEntry GetAdvancedGroupedEntry(
+            Game game,
+            LibraryPlugin plugin,
+            Type colGroupType,
+            Guid groupObjId,
+            IGameDatabase database,
+            PlayniteSettings settings)
         {
-            this.colGroupType = colGroupType;
-            this.colGroupId = colGroupId;
-
             if (colGroupType == typeof(Genre))
             {
-                Genre = game.Genres?.FirstOrDefault(a => a.Id == colGroupId);
+                var obj = database.Genres.Get(groupObjId);
+                if (obj != null)
+                {
+                    return new GamesCollectionViewEntry(game, plugin, settings) { Genre = obj };
+                }
             }
             else if (colGroupType == typeof(Developer))
             {
-                Developer = game.Developers?.FirstOrDefault(a => a.Id == colGroupId);
+                var obj = database.Companies.Get(groupObjId);
+                if (obj != null)
+                {
+                    return new GamesCollectionViewEntry(game, plugin, settings) { Developer = obj };
+                }
             }
             else if (colGroupType == typeof(Publisher))
             {
-                Publisher = game.Publishers?.FirstOrDefault(a => a.Id == colGroupId);
+                var obj = database.Companies.Get(groupObjId);
+                if (obj != null)
+                {
+                    return new GamesCollectionViewEntry(game, plugin, settings) { Publisher = obj };
+                }
             }
             else if (colGroupType == typeof(Tag))
             {
-                Tag = game.Tags?.FirstOrDefault(a => a.Id == colGroupId);
+                var obj = database.Tags.Get(groupObjId);
+                if (obj != null)
+                {
+                    return new GamesCollectionViewEntry(game, plugin, settings) { Tag = obj };
+                }
             }
             else if (colGroupType == typeof(GameFeature))
             {
-                Feature = game.Features?.FirstOrDefault(a => a.Id == colGroupId);
+                var obj = database.Features.Get(groupObjId);
+                if (obj != null)
+                {
+                    return new GamesCollectionViewEntry(game, plugin, settings) { Feature = obj };
+                }
             }
             else if (colGroupType == typeof(Category))
             {
-                Category = game.Categories?.FirstOrDefault(a => a.Id == colGroupId);
+                var obj = database.Categories.Get(groupObjId);
+                if (obj != null)
+                {
+                    return new GamesCollectionViewEntry(game, plugin, settings) { Category = obj };
+                }
             }
+
+            return null;
         }
 
         public void Dispose()
@@ -290,6 +319,7 @@ namespace Playnite
             {
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Game.Name)));
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DisplayName)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(NameGroup)));
             }
 
             if (propertyName == nameof(Game.Icon))
@@ -413,6 +443,19 @@ namespace Playnite
         public static explicit operator Game(GamesCollectionViewEntry entry)
         {
             return entry.Game;
+        }
+
+        private char GetNameGroup()
+        {
+            if (Game.Name.IsNullOrEmpty())
+            {
+                return '#';
+            }
+            else
+            {
+                var firstChar = char.ToUpper(Game.Name[0]);
+                return char.IsLetter(firstChar) ? firstChar : '#';
+            }
         }
     }
 }

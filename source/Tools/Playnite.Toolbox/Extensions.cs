@@ -23,7 +23,7 @@ namespace Playnite.Toolbox
 
         public static string GenerateScriptExtension(ScriptLanguage language, string name, string directory)
         {
-            var extDirName = Common.Paths.GetSafeFilename(name).Replace(" ", string.Empty);
+            var extDirName = Common.Paths.GetSafePathName(name).Replace(" ", string.Empty);
             var outDir = Path.Combine(directory, extDirName);
             if (Directory.Exists(outDir))
             {
@@ -37,7 +37,7 @@ namespace Playnite.Toolbox
 
         public static string GeneratePluginExtension(ExtensionType type, string name, string directory)
         {
-            var normalizedName = Common.Paths.GetSafeFilename(name).Replace(" ", string.Empty);
+            var normalizedName = Common.Paths.GetSafePathName(name).Replace(" ", string.Empty);
             var outDir = Path.Combine(directory, normalizedName);
             if (Directory.Exists(outDir))
             {
@@ -100,8 +100,15 @@ namespace Playnite.Toolbox
         public static string PackageExtension(string extDirectory, string targetPath)
         {
             var dirInfo = new DirectoryInfo(extDirectory);
-            var extInfo = ExtensionFactory.GetDescriptionFromFile(Path.Combine(extDirectory, PlaynitePaths.ExtensionManifestFileName));
-            var packedPath = Path.Combine(targetPath, $"{dirInfo.Name}_{extInfo.Version.ToString().Replace(".", "_")}{PlaynitePaths.PackedExtensionFileExtention}");
+            var extInfo = ExtensionInstaller.GetExtensionManifest(Path.Combine(extDirectory, PlaynitePaths.ExtensionManifestFileName));
+            if (extInfo.Id.IsNullOrEmpty())
+            {
+                throw new Exception("Cannot package extension, ID is missing!");
+            }
+
+            extInfo.VerifyManifest();
+
+            var packedPath = Path.Combine(targetPath, $"{Common.Paths.GetSafePathName(extInfo.Name).Replace(' ', '_')}_{extInfo.Version.ToString().Replace(".", "_")}{PlaynitePaths.PackedExtensionFileExtention}");
             FileSystem.PrepareSaveFile(packedPath);
             var ignoreFiles = File.ReadAllLines(Paths.ExtFileIgnoreListPath);
 
@@ -117,7 +124,7 @@ namespace Playnite.Toolbox
                             continue;
                         }
 
-                        zipFile.CreateEntryFromFile(file, subName);
+                        zipFile.CreateEntryFromFile(file, subName, CompressionLevel.Optimal);
                     }
                 }
             }

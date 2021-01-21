@@ -174,7 +174,7 @@ namespace Playnite.DesktopApp.ViewModels
             this.extensions = extensions;
             this.playniteApi = playniteApi;
 
-            var plugins = extensions.GetExtensionDescriptors().Where(a => a.Type == ExtensionType.GameLibrary);
+            var plugins = ExtensionFactory.GetExtensionDescriptors().Where(a => a.Type == ExtensionType.GameLibrary);
             foreach (var description in plugins)
             {
                 foreach (LibraryPlugin provider in extensions.LoadPlugins(description, playniteApi).Where(a => a is LibraryPlugin))
@@ -185,7 +185,7 @@ namespace Playnite.DesktopApp.ViewModels
                         selected = provider.Client.IsInstalled;
                     }
 
-                    LibraryPlugins.Add(new SelectablePlugin(selected, provider, description));
+                    LibraryPlugins.Add(new SelectablePlugin(selected, provider, description, false));
                 }
             }
         }
@@ -197,7 +197,7 @@ namespace Playnite.DesktopApp.ViewModels
 
         public void CloseView(bool? result)
         {
-            Settings.DisabledPlugins = LibraryPlugins.Where(a => !a.Selected)?.Select(a => a.Description.FolderName).ToList();
+            Settings.DisabledPlugins = LibraryPlugins.Where(a => !a.Selected)?.Select(a => a.Description.DirectoryName).ToList();
             foreach (var plugin in LibraryPlugins)
             {
                 plugin.Plugin.Dispose();

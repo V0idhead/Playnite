@@ -55,6 +55,30 @@ namespace Playnite.Controls
         public static TextRenderingMode TextRenderingMode { get; private set; } = TextRenderingMode.Auto;
         public event PropertyChangedEventHandler PropertyChanged;
 
+        public static readonly RoutedEvent ClosedRoutedEvent = EventManager.RegisterRoutedEvent(
+            "ClosedRouted",
+            RoutingStrategy.Bubble,
+            typeof(RoutedEventHandler),
+            typeof(WindowBase));
+
+        public event RoutedEventHandler ClosedRouted
+        {
+            add { AddHandler(ClosedRoutedEvent, value); }
+            remove { RemoveHandler(ClosedRoutedEvent, value); }
+        }
+
+        public static readonly RoutedEvent LoadedRoutedEvent = EventManager.RegisterRoutedEvent(
+            "LoadedRouted",
+            RoutingStrategy.Bubble,
+            typeof(RoutedEventHandler),
+            typeof(WindowBase));
+
+        public event RoutedEventHandler LoadedRouted
+        {
+            add { AddHandler(LoadedRoutedEvent, value); }
+            remove { RemoveHandler(LoadedRoutedEvent, value); }
+        }
+
         protected override AutomationPeer OnCreateAutomationPeer()
         {
             return automationPeer;
@@ -126,6 +150,8 @@ namespace Playnite.Controls
         public static readonly DependencyProperty ShowTitleProperty =
             DependencyProperty.Register(nameof(ShowTitle), typeof(bool), typeof(WindowBase), new PropertyMetadata(true, ShowTitlePropertyChanged));
 
+        public bool IsShown { get; private set; }
+
         static WindowBase()
         {
             DefaultStyleKeyProperty.OverrideMetadata(typeof(WindowBase), new FrameworkPropertyMetadata(typeof(WindowBase)));
@@ -147,6 +173,17 @@ namespace Playnite.Controls
 
             TextOptions.SetTextFormattingMode(this, TextFormattingMode);
             TextOptions.SetTextRenderingMode(this, TextRenderingMode);
+            Closed += (_, __) =>
+            {
+                IsShown = false;
+                RaiseEvent(new RoutedEventArgs(ClosedRoutedEvent));
+            };
+
+            Loaded += (_, __) =>
+            {
+                IsShown = true;
+                RaiseEvent(new RoutedEventArgs(LoadedRoutedEvent));
+            };
         }
 
         public static void SetTextRenderingOptions(TextFormattingModeOptions formatting, TextRenderingModeOptions rendering)

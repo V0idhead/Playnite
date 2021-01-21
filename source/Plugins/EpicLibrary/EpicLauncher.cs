@@ -13,8 +13,9 @@ namespace EpicLibrary
     public class EpicLauncher
     {
         public const string GameLaunchUrlMask = @"com.epicgames.launcher://apps/{0}?action=launch&silent=true";
+        public const string LibraryLaunchUrl = @"com.epicgames.launcher://store/library";
 
-        public const string AllUsersPath = @"c:\Users\All Users\Epic\";
+        public static string AllUsersPath => Path.Combine(Environment.ExpandEnvironmentVariables("%PROGRAMDATA%"), "Epic");
 
         public static string ClientExecPath
         {
@@ -108,7 +109,12 @@ namespace EpicLibrary
 
             foreach (var manFile in Directory.GetFiles(installListPath, "*.item"))
             {
-                manifests.Add(Serialization.FromJson<InstalledManifiest>(FileSystem.ReadFileAsStringSafe(manFile)));
+                var manifest = Serialization.FromJson<InstalledManifiest>(FileSystem.ReadFileAsStringSafe(manFile));
+                if (manifest != null)
+                // Some weird issue causes manifest to be created empty by Epic client
+                {
+                    manifests.Add(manifest);
+                }
             }
 
             return manifests;

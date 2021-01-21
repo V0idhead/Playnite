@@ -126,22 +126,6 @@ namespace BattleNetLibrary
             },
             new BNetApp()
             {
-                ApiId = 1146311730,
-                ProductId = "DST2",
-                InternalId = "destiny2",
-                IconUrl = @"https://blznav.akamaized.net/img/games/logo-dest2-933dcf397eb647e0.png",
-                BackgroundUrl = @"https://bnetproduct-a.akamaihd.net//fbd/22512bcb91e4a3b3d9ee208be2ee3beb-prod-mobile-bg.jpg",
-                CoverUrl = "http://bnetproduct-a.akamaihd.net//f84/7d453e354c9df8ca335ad45da020704c-prod-card-tall.jpg",
-                Name = "Destiny 2",
-                Type = BNetAppType.Default,
-                Links = new List<Link>()
-                {
-                    new Link("Homepage", "https://www.destinythegame.com/"),
-                    new Link("Forums", "https://www.bungie.net/en/Forums/Topics?pNumber=0&tg=Destiny2")
-                }
-            },
-            new BNetApp()
-            {
                 ProductId = "D2",
                 InternalId = "Diablo II",
                 IconUrl = @"https://bneteu-a.akamaihd.net/account/static/local-common/images/game-icons/d2dv-32.4PqK2.png",
@@ -216,8 +200,7 @@ namespace BattleNetLibrary
                 Type = BNetAppType.Default,
                 Links = new List<Link>()
                 {
-                    new Link("Homepage", "https://www.callofduty.com/"),
-                    new Link("Forums", "https://community.callofduty.com/t5/Call-of-Duty-Black-Ops-4-Forum/ct-p/cod-blackops4-forums")
+                    new Link("Homepage", "https://www.callofduty.com/")
                 }
             },
             new BNetApp()
@@ -232,9 +215,49 @@ namespace BattleNetLibrary
                 Type = BNetAppType.Default,
                 Links = new List<Link>()
                 {
-                    new Link("Homepage", "https://www.callofduty.com/"),
-                    new Link("Forums", "https://community.callofduty.com/t5/Modern-Warfare-Forum/bd-p/cod-mw-forum")
+                    new Link("Homepage", "https://www.callofduty.com/")
                 }
+            },
+            new BNetApp()
+            {
+                ApiId = 22323,
+                ProductId = "W3",
+                InternalId = "w3",
+                IconUrl = @"https://blznav.akamaized.net/img/games/logo-w3r-c8a76eea272dbd55.png",
+                BackgroundUrl = @"https://bnetproduct-a.akamaihd.net//faf/44004fe111706bac3ad1c9a5c7264d1f-WC3R_2020_Orc_Art_Shop_Product_Page_Assets_prod-full-bg_TS03.jpg",
+                CoverUrl = "https://bnetproduct-a.akamaihd.net//5f/3d885e4077747a04a646186a17607769-WC3R_2020_Orc_Art_Shop_Product_Page_Assets_prod-card-vert_TS03.jpg",
+                Name = "Warcraft III: Reforged",
+                Type = BNetAppType.Default,
+                Links = new List<Link>()
+                {
+                    new Link("Homepage", "https://playwarcraft3.com/"),
+                    new Link("Forums", "https://us.forums.blizzard.com/en/warcraft3/")
+                }
+            },
+            new BNetApp()
+            {
+                ApiId = 1279351378,
+                ProductId = "LAZR",
+                InternalId = "lazarus",
+                IconUrl = @"https://blznav.akamaized.net/img/games/logo-codmw2cr-403ff7094aa97396.png",
+                BackgroundUrl = @"https://bnetproduct-a.akamaihd.net//f90/ca5641d89e0495fcd468350d298097d5-Lazarus-Bnet_Placeholder-Shop_Background_Desktop-2280x910-For_20200331.jpg",
+                CoverUrl = "https://bnetproduct-a.akamaihd.net//f/7e875975619de0671dc538c8d85ba550-Lazarus-Bnet_Placeholder-Card_Product_Vert-700x850-For_2020406-Corrected.jpg",
+                Name = "Call of Duty: Modern Warfare 2 Campaign Remastered",
+                Type = BNetAppType.Default,
+                Links = new List<Link>()
+                {
+                    new Link("Homepage", "https://www.callofduty.com/mw2campaignremastered")
+                }
+            },
+            new BNetApp()
+            {
+                ApiId = 1514493267,
+                ProductId = "ZEUS",
+                InternalId = "zeus",
+                BackgroundUrl = @"https://bnetproduct-a.akamaihd.net//60/d4b6308a9c0ffb51f723462ef1bb73b9-CODBO_CW-Bnet_Product_Desktop-Background-2280x910-UPDATE-For_20200826.jpg",
+                CoverUrl = "https://bnetproduct-a.akamaihd.net//ffd/a8bbbeddae915be62457bc2799f602d0-CODCW-Bnet_Shop_Prod_Card_Vert-700x850-For_20200826.jpg",
+                Name = "Call of Duty: Black Ops Cold War",
+                Type = BNetAppType.Default
             }
         };
 

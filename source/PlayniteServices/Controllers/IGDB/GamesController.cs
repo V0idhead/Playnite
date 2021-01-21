@@ -6,7 +6,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
-using LiteDB;
 using System.IO;
 using Playnite;
 using System.Web;
@@ -14,6 +13,7 @@ using Playnite.SDK;
 using Microsoft.Extensions.Options;
 using PlayniteServices.Filters;
 using System.Text.RegularExpressions;
+using PlayniteServices.Controllers.IGDB.DataGetter;
 
 namespace PlayniteServices.Controllers.IGDB
 {
@@ -21,60 +21,104 @@ namespace PlayniteServices.Controllers.IGDB
     [Route("igdb/games")]
     public class GamesController : Controller
     {
+        private static readonly JsonSerializer jsonSerializer = new JsonSerializer();
         private static readonly object CacheLock = new object();
-        private const string cacheDir = "game_search";
+        private const string cacheDirName = "game_search";
         private static ILogger logger = LogManager.GetLogger();
+        private static readonly char[] bracketsMatchList = new char[] { '[', ']', '(', ')', '{', '}' };
 
-        private IOptions<AppSettings> appSettings;
+        private UpdatableAppSettings settings;
+        private IgdbApi igdbApi;
+        private Games games;
+        private AlternativeNames alternativeNames;
 
-        public GamesController(IOptions<AppSettings> settings)
+        public GamesController(UpdatableAppSettings settings, IgdbApi igdbApi)
         {
-            appSettings = settings;
+            this.settings = settings;
+            this.igdbApi = igdbApi;
+            games = new Games(igdbApi);
+            alternativeNames = new AlternativeNames(igdbApi);
         }
 
         [HttpGet("{gameName}")]
-        public async Task<ServicesResponse<List<ExpandedGame>>> Get(string gameName)
+        public async Task<ServicesResponse<List<ExpandedGameLegacy>>> Get(string gameName)
         {
-            return new ServicesResponse<List<ExpandedGame>>(await GetSearchResults(gameName));
+            var search = await GetSearchResults(gameName, false);
+            var altSearch = await GetSearchResults(gameName, settings.Settings.IGDB.AlternativeSearch);
+            foreach (var alt in altSearch)
+            {
+                if (search.Any(a => a.id == alt.id))
+                {
+                    continue;
+                }
+                else
+                {
+                    search.Add(alt);
+                }
+            }
+
+            return new ServicesResponse<List<ExpandedGameLegacy>>(search);
         }
 
-        public static async Task<List<ExpandedGame>> GetSearchResults(string searchString)
+        public async Task<List<ExpandedGameLegacy>> GetSearchResults(string searchString, bool alternativeSearch)
         {
+            if (searchString.IsNullOrEmpty())
+            {
+                return new List<ExpandedGameLegacy>();
+            }
+
             List<Game> searchResult = null;
-            searchString = ModelsUtils.GetIgdbSearchString(searchString);
-            logger.Debug($"IGDB search: {searchString}");
-            var cachePath = Path.Combine(IGDB.CacheDirectory, cacheDir, Playnite.Common.Paths.GetSafeFilename(searchString) + ".json");
+            var modifiedSearchString = ModelsUtils.GetIgdbSearchString(searchString);
+            var cachePath = Path.Combine(
+                igdbApi.CacheRoot,
+                cacheDirName,
+                (alternativeSearch ? "alt_" : "srch_") + Playnite.Common.Paths.GetSafePathName(modifiedSearchString) + ".json");
             lock (CacheLock)
             {
                 if (System.IO.File.Exists(cachePath))
                 {
                     var fileInfo = new FileInfo(cachePath);
                     fileInfo.Refresh();
-                    if ((DateTime.Now - fileInfo.LastWriteTime).TotalHours <= IGDB.SearchCacheTimeout)
+                    if ((DateTime.Now - fileInfo.LastWriteTime).TotalHours <= settings.Settings.IGDB.SearchCacheTimeout)
                     {
-                        searchResult = JsonConvert.DeserializeObject<List<Game>>(System.IO.File.ReadAllText(cachePath));
+                        using (var fs = new FileStream(cachePath, FileMode.Open, FileAccess.Read))
+                        using (var sr = new StreamReader(fs))
+                        using (var reader = new JsonTextReader(sr))
+                        {
+                            searchResult = jsonSerializer.Deserialize<List<Game>>(reader);
+                        }
                     }
                 }
             }
 
             if (searchResult == null)
             {
-                var libraryStringResult = await IGDB.SendStringRequest("games", $"search \"{HttpUtility.UrlDecode(searchString)}\"; fields id; limit 40;");
-                searchResult = JsonConvert.DeserializeObject<List<Game>>(libraryStringResult);
+                var matchString = HttpUtility.UrlDecode(modifiedSearchString);
+                if (matchString.ContainsAny(bracketsMatchList))
+                {
+                    return new List<ExpandedGameLegacy>();
+                }
+
+                var whereQuery = $"where (name ~ *\"{matchString}\"*) | (alternative_names.name ~ *\"{matchString}\"*); fields id; limit 50;";
+                var searchQuery = $"search \"{matchString}\"; fields id; limit 50;";
+                var query = alternativeSearch ? whereQuery : searchQuery;
+                var searchStringResult = await igdbApi.SendStringRequest("games", query);
+                searchResult = JsonConvert.DeserializeObject<List<Game>>(searchStringResult);
+
                 lock (CacheLock)
                 {
                     Playnite.Common.FileSystem.PrepareSaveFile(cachePath);
-                    System.IO.File.WriteAllText(cachePath, libraryStringResult);
+                    System.IO.File.WriteAllText(cachePath, searchStringResult);
                 }
             }
 
-            var finalResult = new List<ExpandedGame>();
+            var finalResult = new List<ExpandedGameLegacy>();
             for (int i = 0; i < searchResult.Count; i++)
             {
                 Game result = null;
                 try
                 {
-                    result = (await GameController.GetItem(searchResult[i].id)).Data;
+                    result = await games.Get(searchResult[i].id);
                 }
                 catch (Exception e)
                 {
@@ -87,7 +131,7 @@ namespace PlayniteServices.Controllers.IGDB
                     continue;
                 }
 
-                var xpanded = new ExpandedGame()
+                var xpanded = new ExpandedGameLegacy()
                 {
                     id = result.id,
                     name = result.name,
@@ -99,7 +143,7 @@ namespace PlayniteServices.Controllers.IGDB
                     xpanded.alternative_names = new List<AlternativeName>();
                     foreach (var nameId in result.alternative_names)
                     {
-                        xpanded.alternative_names.Add((await AlternativeNameController.GetItem(nameId)).Data);
+                        xpanded.alternative_names.Add(await alternativeNames.Get(nameId));
                     }
                 }
 

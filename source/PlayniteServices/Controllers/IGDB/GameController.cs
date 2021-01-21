@@ -4,6 +4,7 @@ using Newtonsoft.Json;
 using Playnite;
 using Playnite.Common;
 using Playnite.SDK;
+using PlayniteServices.Controllers.IGDB.DataGetter;
 using PlayniteServices.Filters;
 using PlayniteServices.Models.IGDB;
 using System;
@@ -17,17 +18,19 @@ using System.Threading.Tasks;
 namespace PlayniteServices.Controllers.IGDB
 {
     [Route("igdb/game")]
-    public class GameController : IgdbItemController
+    public class GameController : Controller
     {
         private static ILogger logger = LogManager.GetLogger();
         private static readonly object CacheLock = new object();
         private const string endpointPath = "games";
 
-        private AppSettings appSettings;
+        private UpdatableAppSettings settings;
+        private IgdbApi igdbApi;
 
-        public GameController(IOptions<AppSettings> settings)
+        public GameController(UpdatableAppSettings settings, IgdbApi igdbApi)
         {
-            appSettings = settings.Value;
+            this.settings = settings;
+            this.igdbApi = igdbApi;
         }
 
         [ServiceFilter(typeof(PlayniteVersionFilter))]
@@ -37,9 +40,9 @@ namespace PlayniteServices.Controllers.IGDB
             return await GetItem(gameId);
         }
 
-        public static async Task<ServicesResponse<Game>> GetItem(ulong gameId)
+        public async Task<ServicesResponse<Game>> GetItem(ulong gameId)
         {
-            return new ServicesResponse<Game>(await GetItem<Game>(gameId, endpointPath, CacheLock));
+            return new ServicesResponse<Game>(await igdbApi.GetItem<Game>(gameId, endpointPath, CacheLock));
         }
 
         // Only use for IGDB webhook.
@@ -48,40 +51,51 @@ namespace PlayniteServices.Controllers.IGDB
         {
             if (Request.Headers.TryGetValue("X-Secret", out var secret))
             {
-                if (secret != IGDB.WebHookSecret)
+                if (secret != settings.Settings.IGDB.WebHookSecret)
                 {
+                    logger.Error($"X-Secret doesn't match: {secret}");
                     return BadRequest();
                 }
 
-                Game game = null;
-                string jsonString = null;
-                using (StreamReader reader = new StreamReader(Request.Body, Encoding.UTF8))
+                try
                 {
-                    jsonString = await reader.ReadToEndAsync();
-                    if (!string.IsNullOrEmpty(jsonString))
+                    Game game = null;
+                    string jsonString = null;
+                    using (StreamReader reader = new StreamReader(Request.Body, Encoding.UTF8))
                     {
-                        game = Serialization.FromJson<Game>(jsonString);
+                        jsonString = await reader.ReadToEndAsync();
+                        if (!string.IsNullOrEmpty(jsonString))
+                        {
+                            game = Serialization.FromJson<Game>(jsonString);
+                        }
+                    }
+
+                    if (game == null)
+                    {
+                        logger.Error("Failed IGDB content serialization.");
+                        return Ok();
+                    }
+
+                    logger.Info($"Received game webhook from IGDB: {game.id}");
+                    var cachePath = Path.Combine(settings.Settings.IGDB.CacheDirectory, endpointPath, game.id + ".json");
+                    lock (CacheLock)
+                    {
+                        FileSystem.PrepareSaveFile(cachePath);
+                        System.IO.File.WriteAllText(cachePath, jsonString, Encoding.UTF8);
                     }
                 }
-
-                if (game == null)
+                catch (Exception e)
                 {
-                    logger.Error("Failed IGDB content serialization.");
-                    return Ok();
-                }
-
-                logger.Info($"Received game webhook from IGDB: {game.id}");
-                var cachePath = Path.Combine(IGDB.CacheDirectory, endpointPath, game.id + ".json");
-                lock (CacheLock)
-                {
-                    FileSystem.PrepareSaveFile(cachePath);
-                    System.IO.File.WriteAllText(cachePath, jsonString, Encoding.UTF8);
+                    logger.Error(e, "Failed to process IGDB webhook.");
                 }
 
                 return Ok();
             }
-
-            return BadRequest();
+            else
+            {
+                logger.Error("Missing X-Secret from IGDB webhook.");
+                return BadRequest();
+            }
         }
     }
 
@@ -89,28 +103,30 @@ namespace PlayniteServices.Controllers.IGDB
     [Route("igdb/game_parsed")]
     public class GameParsedController : Controller
     {
-        private IOptions<AppSettings> appSettings;
+        private UpdatableAppSettings settings;
+        private IgdbApi igdbApi;
 
-        public GameParsedController(IOptions<AppSettings> settings)
+        public GameParsedController(UpdatableAppSettings settings, IgdbApi igdbApi)
         {
-            appSettings = settings;
+            this.settings = settings;
+            this.igdbApi = igdbApi;
         }
 
         [HttpGet("{gameId}")]
-        public async Task<ServicesResponse<ExpandedGame>> Get(ulong gameId)
+        public async Task<ServicesResponse<ExpandedGameLegacy>> Get(ulong gameId)
         {
-            return new ServicesResponse<ExpandedGame>(await GetExpandedGame(gameId));
+            return new ServicesResponse<ExpandedGameLegacy>(await GetExpandedGame(gameId));
         }
 
-        public async static Task<ExpandedGame> GetExpandedGame(ulong gameId)
+        public async Task<ExpandedGameLegacy> GetExpandedGame(ulong gameId)
         {
-            var game = (await GameController.GetItem(gameId)).Data;
+            var game = await igdbApi.Games.Get(gameId);
             if (game.id == 0)
             {
-                new ExpandedGame();
+                new ExpandedGameLegacy();
             }
 
-            var parsedGame = new ExpandedGame()
+            var parsedGame = new ExpandedGameLegacy()
             {
                 id = game.id,
                 name = game.name,
@@ -132,7 +148,7 @@ namespace PlayniteServices.Controllers.IGDB
                 parsedGame.alternative_names = new List<AlternativeName>();
                 foreach (var nameId in game.alternative_names)
                 {
-                    parsedGame.alternative_names.Add((await AlternativeNameController.GetItem(nameId)).Data);
+                    parsedGame.alternative_names.Add(await igdbApi.AlternativeNames.Get(nameId));
                 }
             }
 
@@ -141,7 +157,7 @@ namespace PlayniteServices.Controllers.IGDB
                 parsedGame.involved_companies = new List<ExpandedInvolvedCompany>();
                 foreach (var companyId in game.involved_companies)
                 {
-                    parsedGame.involved_companies.Add((await InvolvedCompanyController.GetItem(companyId)).Data);
+                    parsedGame.involved_companies.Add(await igdbApi.InvolvedCompanies.Get(companyId));
                 }
             }
 
@@ -150,7 +166,7 @@ namespace PlayniteServices.Controllers.IGDB
                 parsedGame.genres_v3 = new List<Genre>();
                 foreach (var genreId in game.genres)
                 {
-                    parsedGame.genres_v3.Add((await GenreController.GetItem(genreId)).Data);
+                    parsedGame.genres_v3.Add(await igdbApi.Genres.Get(genreId));
                 }
             }
 
@@ -159,7 +175,7 @@ namespace PlayniteServices.Controllers.IGDB
                 parsedGame.websites = new List<Website>();
                 foreach (var websiteId in game.websites)
                 {
-                    parsedGame.websites.Add((await WebsiteController.GetItem(websiteId)).Data);
+                    parsedGame.websites.Add(await igdbApi.Websites.Get(websiteId));
                 }
             }
 
@@ -168,7 +184,7 @@ namespace PlayniteServices.Controllers.IGDB
                 parsedGame.game_modes_v3 = new List<GameMode>();
                 foreach (var modeId in game.game_modes)
                 {
-                    parsedGame.game_modes_v3.Add((await GameModeController.GetItem(modeId)).Data);
+                    parsedGame.game_modes_v3.Add(await igdbApi.GameModes.Get(modeId));
                 }
             }
 
@@ -177,13 +193,13 @@ namespace PlayniteServices.Controllers.IGDB
                 parsedGame.player_perspectives = new List<PlayerPerspective>();
                 foreach (var persId in game.player_perspectives)
                 {
-                    parsedGame.player_perspectives.Add((await PlayerPerspectiveController.GetItem(persId)).Data);
+                    parsedGame.player_perspectives.Add(await igdbApi.PlayerPerspectives.Get(persId));
                 }
             }
 
             if (game.cover > 0)
             {
-                parsedGame.cover_v3 = (await CoverController.GetItem(game.cover)).Data;
+                parsedGame.cover_v3 = await igdbApi.Covers.Get(game.cover);
             }
 
             if (game.artworks?.Any() == true)
@@ -191,7 +207,7 @@ namespace PlayniteServices.Controllers.IGDB
                 parsedGame.artworks = new List<GameImage>();
                 foreach (var artworkId in game.artworks)
                 {
-                    parsedGame.artworks.Add((await ArtworkController.GetItem(artworkId)).Data);
+                    parsedGame.artworks.Add(await igdbApi.Artworks.Get(artworkId));
                 }
             }
 
@@ -200,7 +216,7 @@ namespace PlayniteServices.Controllers.IGDB
                 parsedGame.screenshots = new List<GameImage>();
                 foreach (var screenshotId in game.screenshots)
                 {
-                    parsedGame.screenshots.Add((await ScreenshotController.GetItem(screenshotId)).Data);
+                    parsedGame.screenshots.Add(await igdbApi.Screenshots.Get(screenshotId));
                 }
             }
 

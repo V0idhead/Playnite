@@ -63,22 +63,34 @@ namespace Playnite.DesktopApp.ViewModels
 
         public class ImportableEmulator : ScannedEmulator
         {
+            private bool import = true;
             public bool Import
             {
-                get; set;
-            } = true;
+                get => import;
+                set
+                {
+                    import = value;
+                    OnPropertyChanged();
+                }
+            }
 
             public ImportableEmulator(ScannedEmulator emulator) : base(emulator.Name, emulator.Profiles)
             {
             }
         }
 
-        public class ImportableGame
+        public class ImportableGame : ObservableObject
         {
+            private bool import = true;
             public bool Import
             {
-                get; set;
-            } = true;
+                get => import;
+                set
+                {
+                    import = value;
+                    OnPropertyChanged();
+                }
+            }
 
             public Game Game
             {
@@ -232,6 +244,30 @@ namespace Playnite.DesktopApp.ViewModels
             }
         }
 
+        private bool markImportAllEmulators;
+        public bool MarkImportAllEmulators
+        {
+            get => markImportAllEmulators;
+            set
+            {
+                markImportAllEmulators = value;
+                OnPropertyChanged();
+                EmulatorList.ForEach(a => a.Import = markImportAllEmulators);
+            }
+        }
+
+        private bool markImportAllGames;
+        public bool MarkImportAllGames
+        {
+            get => markImportAllGames;
+            set
+            {
+                markImportAllGames = value;
+                OnPropertyChanged();
+                GamesList.ForEach(a => a.Import = markImportAllGames);
+            }
+        }
+
         private static ILogger logger = LogManager.GetLogger();
         private IWindowFactory window;
         private IDialogsFactory dialogs;
@@ -382,15 +418,23 @@ namespace Playnite.DesktopApp.ViewModels
             {
                 IsLoading = true;
                 cancelToken = new CancellationTokenSource();
-                var emulators = await EmulatorFinder.SearchForEmulators(path, EmulatorDefinitions, cancelToken);
-                if (emulators != null)
+                try
                 {
-                    if (EmulatorList == null)
+                    var emulators = await EmulatorFinder.SearchForEmulators(path, EmulatorDefinitions, cancelToken);
+                    if (emulators != null)
                     {
-                        EmulatorList = new RangeObservableCollection<ImportableEmulator>();
-                    }
+                        if (EmulatorList == null)
+                        {
+                            EmulatorList = new RangeObservableCollection<ImportableEmulator>();
+                        }
 
-                    EmulatorList.AddRange(emulators.Select(a => new ImportableEmulator(a)));
+                        EmulatorList.AddRange(emulators.Select(a => new ImportableEmulator(a)));
+                    }
+                }
+                catch (Exception e) when (!PlayniteEnvironment.ThrowAllErrors)
+                {
+                    logger.Error(e, $"Failed to search for emulators in {path}.");
+                    dialogs.ShowErrorMessage(e.Message, "");
                 }
             }
             finally
@@ -407,26 +451,34 @@ namespace Playnite.DesktopApp.ViewModels
             {
                 IsLoading = true;
                 cancelToken = new CancellationTokenSource();
-                var games = await EmulatorFinder.SearchForGames(path, profile, cancelToken);
-                if (games?.Any() == true)
+                try
                 {
-                    if (GamesList == null)
+                    var games = await EmulatorFinder.SearchForGames(path, profile, cancelToken);
+                    if (games?.Any() == true)
                     {
-                        GamesList = new RangeObservableCollection<ImportableGame>();
-                    }
+                        if (GamesList == null)
+                        {
+                            GamesList = new RangeObservableCollection<ImportableGame>();
+                        }
 
-                    var emulator = AvailableEmulators.First(a => a.Profiles.Any(b => b.Id == profile.Id));
-                    var importedRoms = database.Games.Where(a => !a.GameImagePath.IsNullOrEmpty()).Select(a => a.GameImagePath).ToList();
-                    GamesList.AddRange(games
-                        .Where(a =>
-                        {
-                            return !importedRoms.ContainsString(a.GameImagePath, StringComparison.OrdinalIgnoreCase);
-                        })
-                        .Select(a =>
-                        {
-                            a.PlatformId = profile.Platforms?.FirstOrDefault() ?? Guid.Empty;
-                            return new ImportableGame(a, emulator, profile);
-                        }));
+                        var emulator = AvailableEmulators.First(a => a.Profiles.Any(b => b.Id == profile.Id));
+                        var importedRoms = database.Games.Where(a => !a.GameImagePath.IsNullOrEmpty()).Select(a => a.GameImagePath).ToList();
+                        GamesList.AddRange(games
+                            .Where(a =>
+                            {
+                                return !importedRoms.ContainsString(a.GameImagePath, StringComparison.OrdinalIgnoreCase);
+                            })
+                            .Select(a =>
+                            {
+                                a.PlatformId = profile.Platforms?.FirstOrDefault() ?? Guid.Empty;
+                                return new ImportableGame(a, emulator, profile);
+                            }));
+                    }
+                }
+                catch (Exception e) when (!PlayniteEnvironment.ThrowAllErrors)
+                {
+                    logger.Error(e, $"Failed to search for emulated games in {path}.");
+                    dialogs.ShowErrorMessage(e.Message, "");
                 }
             }
             finally
@@ -461,9 +513,9 @@ namespace Playnite.DesktopApp.ViewModels
             }
 
             ImportedGames = GamesList.Where(a => a.Import)?.Select(a => a.Game).ToList();
-            ProgressViewViewModel.ActivateProgress(
-                () => database.Games.Add(ImportedGames),
-                string.Format(resources.GetString("LOCProgressImportinGames"), ImportedGames.Count));
+            GlobalProgress.ActivateProgress(
+                (_) => database.Games.Add(ImportedGames),
+                new GlobalProgressOptions(string.Format(resources.GetString("LOCProgressImportinGames"), ImportedGames.Count)));
         }
 
         private void AddSelectedEmulatorsToDB()

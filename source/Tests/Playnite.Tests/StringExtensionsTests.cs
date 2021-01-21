@@ -63,6 +63,16 @@ namespace Playnite.Tests
         }
 
         [Test]
+        public void IsUriTest()
+        {
+            Assert.IsTrue(@"http://www.playnite.link".IsUri());
+            Assert.IsTrue(@"mailto:someadress@test.cz".IsUri());
+            Assert.IsTrue(@"playnite://test/test".IsUri());
+            Assert.IsFalse(@"testsstring".IsUri());
+            Assert.IsFalse(@"c:\test\aa.txt".IsUri());
+        }
+
+        [Test]
         public void IsNullOrWhiteSpaceTest()
         {
             var multiLine = @"
@@ -73,5 +83,24 @@ namespace Playnite.Tests
             Assert.IsTrue(multiLine.IsNullOrWhiteSpace());
         }
 
+        [Test]
+        public void TrimEndStringTest()
+        {
+            Assert.AreEqual("Test ", "Test totrim".TrimEndString("totrim"));
+            Assert.AreEqual("Test totrim", "Test totrim".TrimEndString("aaa"));
+        }
+
+        [Test]
+        public void ToTileCaseTest()
+        {
+            Assert.AreEqual("Test Is Good", "tEst is gOOD".ToTileCase());
+        }
+
+        [Test]
+        public void ContainsAnyTest()
+        {
+            Assert.IsTrue("test[dasd".ContainsAny(new char[] { ']', '[' }));
+            Assert.IsFalse("test dasd".ContainsAny(new char[] { ']', '[' }));
+        }
     }
 }

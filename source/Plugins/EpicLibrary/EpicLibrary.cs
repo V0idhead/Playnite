@@ -44,6 +44,19 @@ namespace EpicLibrary
                 }
 
                 var manifest = manifests.FirstOrDefault(a => a.AppName == app.AppName);
+
+                // DLC
+                if (manifest.AppName != manifest.MainGameAppName)
+                {
+                    continue;
+                }
+
+                // UE plugins
+                if (manifest.AppCategories?.Any(a => a == "plugins" || a == "plugins/engine") == true)
+                {
+                    continue;
+                }
+
                 var game = new GameInfo()
                 {
                     Source = "Epic",
@@ -56,9 +69,11 @@ namespace EpicLibrary
                         Type = GameActionType.URL,
                         Path = string.Format(EpicLauncher.GameLaunchUrlMask, app.AppName),
                         IsHandledByPlugin = true
-                    }
+                    },
+                    Platform = "PC"
                 };
 
+                game.Name = game.Name.RemoveTrademarks();
                 games.Add(game.GameId, game);
             }
 
@@ -78,10 +93,15 @@ namespace EpicLibrary
 
             foreach (var gameAsset in assets.Where(a => a.@namespace != "ue"))
             {
-                var cacheFile = Paths.GetSafeFilename($"{gameAsset.@namespace}_{gameAsset.catalogItemId}_{gameAsset.buildVersion}.json");
+                var cacheFile = Paths.GetSafePathName($"{gameAsset.@namespace}_{gameAsset.catalogItemId}_{gameAsset.buildVersion}.json");
                 cacheFile = Path.Combine(cacheDir, cacheFile);
                 var catalogItem = accountApi.GetCatalogItem(gameAsset.@namespace, gameAsset.catalogItemId, cacheFile);
-                if (catalogItem?.categories?.Where(a => a.path == "applications").Any() != true)
+                if (catalogItem?.categories?.Any(a => a.path == "applications") != true)
+                {
+                    continue;
+                }
+
+                if (catalogItem?.categories?.Any(a => a.path == "dlc") == true)
                 {
                     continue;
                 }
@@ -90,7 +110,8 @@ namespace EpicLibrary
                 {
                     Source = "Epic",
                     GameId = gameAsset.appName,
-                    Name = catalogItem.title,
+                    Name = catalogItem.title.RemoveTrademarks(),
+                    Platform = "PC"
                 });
             }
 
@@ -114,7 +135,6 @@ namespace EpicLibrary
 
         public override ISettings GetSettings(bool firstRunSettings)
         {
-            LibrarySettings.IsFirstRunUse = firstRunSettings;
             return LibrarySettings;
         }
 

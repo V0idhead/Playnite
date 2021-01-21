@@ -30,7 +30,7 @@ namespace UplayLibrary
             return new GameAction()
             {
                 Type = GameActionType.URL,
-                Path = @"uplay://launch/" + id,
+                Path = Uplay.GetLaunchString(id),
                 IsHandledByPlugin = true
             };
         }
@@ -72,12 +72,13 @@ namespace UplayLibrary
 
                 var newGame = new GameInfo
                 {
-                    Name = item.root.name,
+                    Name = item.root.name.RemoveTrademarks(),
                     GameId = item.uplay_id.ToString(),
                     BackgroundImage = item.root.background_image,
                     Icon = item.root.icon_image,
                     CoverImage = item.root.thumb_image,
-                    Source = "Uplay"
+                    Source = "Ubisoft Connect",
+                    Platform = "PC"
                 };
 
                 games.Add(newGame);
@@ -109,11 +110,12 @@ namespace UplayLibrary
                         var newGame = new GameInfo()
                         {
                             GameId = install,
-                            Source = "Uplay",
+                            Source = "Ubisoft Connect",
                             InstallDirectory = installDir,
                             PlayAction = GetGamePlayTask(install),
                             Name = Path.GetFileName(installDir.TrimEnd(Path.DirectorySeparatorChar)),
-                            IsInstalled = true
+                            IsInstalled = true,
+                            Platform = "PC"
                         };
 
                         games.Add(newGame);
@@ -130,7 +132,7 @@ namespace UplayLibrary
 
         public override string LibraryIcon => Uplay.Icon;
 
-        public override string Name => "Uplay";
+        public override string Name => "Ubisoft Connect";
 
         public override Guid Id => Guid.Parse("C2F038E5-8B92-4877-91F1-DA9094155FC5");
 

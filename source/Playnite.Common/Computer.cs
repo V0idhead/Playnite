@@ -19,6 +19,10 @@ namespace Playnite.Common
 
         public string WindowsVersion { get; set; }
 
+        public string WindowsEdition { get; set; }
+
+        public int WindowsBuildVersion { get; set; }
+
         public string Cpu { get; set; }
 
         public int Ram { get; set; }
@@ -94,9 +98,38 @@ namespace Playnite.Common
             }
         }
 
+        public static bool IsTLS13SystemWideEnabled()
+        {
+            try
+            {
+                using (var key = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\TLS 1.3\Client"))
+                {
+                    if (key != null)
+                    {
+                        var isEnabled = key.GetValue("Enabled");
+                        if (isEnabled != null)
+                        {
+                            return Convert.ToBoolean(isEnabled);
+                        }
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                logger.Error(e, "Failed to test TLS 1.3 state.");
+            }
+
+            return false;
+        }
+
         public static int GetWindowsReleaseId()
         {
             return Convert.ToInt32(Registry.GetValue(@"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion", "ReleaseId", ""));
+        }
+
+        public static string GetWindowsProductName()
+        {
+            return Registry.GetValue(@"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion", "ProductName", "").ToString();
         }
 
         public static Guid GetMachineGuid()
@@ -129,7 +162,9 @@ namespace Playnite.Common
             var info = new SystemInfo
             {
                 Is64Bit = Environment.Is64BitOperatingSystem,
-                WindowsVersion = Environment.OSVersion.VersionString
+                WindowsVersion = Environment.OSVersion.VersionString,
+                WindowsBuildVersion = GetWindowsReleaseId(),
+                WindowsEdition = GetWindowsProductName()
             };
 
             using (var win32Proc = new ManagementObjectSearcher("SELECT * FROM Win32_Processor"))
